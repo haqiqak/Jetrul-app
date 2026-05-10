@@ -2,7 +2,7 @@
 RUL Predictor — NASA C-MAPSS FD004
 Streamlit application for Remaining Useful Life prediction.
 
-Models (all artifacts live in the './lstm/' folder):
+Models (all artifacts live in the './jetrul/' folder):
   ✅ LSTM        — CNN-LSTM + Bahdanau Attention   (lstm_fd004_model.keras / lstm_fd004_preprocessors.pkl / lstm_fd004_config.pkl)
   ✅ Random Forest — Supervised Regression          (rf_best_model.pkl)
   ✅ XGBoost      — Supervised Regression           (xgb_best_model.pkl)
@@ -56,9 +56,34 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+  /* ── Hide Streamlit chrome ── */
   #MainMenu { visibility: hidden; }
   footer    { visibility: hidden; }
   header    { visibility: hidden; }
+
+  /* ── Full-window feel: stretch content to use all available space
+        while letting Streamlit manage the sidebar correctly ── */
+  .stApp { overflow-x: hidden; }
+
+  /* Wide layout already set via set_page_config(layout="wide").
+     We only remove the inner horizontal padding so content reaches
+     the edges, and keep Streamlit's auto centering intact. */
+  .block-container {
+    max-width: 98% !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+    margin: 0 auto !important;
+  }
+
+  /* ── Mobile responsiveness ── */
+  @media (max-width: 768px) {
+    .block-container {
+      padding-left: 0.75rem !important;
+      padding-right: 0.75rem !important;
+    }
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,74 +102,223 @@ if st.query_params.get("start") == "true":
 intro_placeholder = st.empty()
 
 if not st.session_state.started:
+    # Inject CSS to make the intro truly full-window inside Streamlit's iframe
+    st.markdown("""
+    <style>
+      /* Zero out all Streamlit chrome so the intro occupies the full viewport */
+      .block-container { padding: 0 !important; max-width: 100% !important; }
+      [data-testid="stAppViewContainer"] > .main { padding: 0 !important; }
+      [data-testid="stVerticalBlock"] { gap: 0 !important; }
+      iframe { display: block; border: none; }
+    </style>
+    """, unsafe_allow_html=True)
     with intro_placeholder.container():
         components.html("""
-<!DOCTYPE html><html><head><meta charset="UTF-8">
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html,body { width:100%; height:100%; overflow:hidden; background:#000814;
-              font-family:'Courier New',Courier,monospace; }
-  #stars { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; }
-  .screen { position:relative; z-index:1; width:100%; height:100vh;
-            display:flex; flex-direction:column; justify-content:center;
-            align-items:center; gap:0; padding:20px; }
-  .logo { width:160px; filter:drop-shadow(0 0 18px rgba(252,61,33,0.6));
-          animation:float 4s ease-in-out infinite; margin-bottom:22px; }
-  @keyframes float { 0%{transform:translateY(0px)} 50%{transform:translateY(-10px)} 100%{transform:translateY(0px)} }
-  .label-ml { font-size:clamp(11px,1.8vw,15px); font-weight:700; letter-spacing:6px;
-               color:#00B4D8; text-transform:uppercase; margin-bottom:10px;
-               opacity:0; animation:fadeUp 0.8s ease 0.3s forwards; }
-  .title-main { font-size:clamp(20px,4vw,38px); font-weight:900; letter-spacing:4px;
-                color:#FFFFFF; text-transform:uppercase; text-align:center;
-                text-shadow:0 0 30px rgba(0,180,216,0.4); margin-bottom:36px;
-                opacity:0; animation:fadeUp 0.8s ease 0.6s forwards; }
-  .divider { width:220px; height:1px;
-             background:linear-gradient(90deg,transparent,#00B4D8,transparent);
-             margin-bottom:28px; opacity:0; animation:fadeIn 0.8s ease 1s forwards; }
-  .credits { display:flex; flex-direction:column; align-items:center; gap:8px;
-             margin-bottom:40px; opacity:0; animation:fadeIn 0.8s ease 1.2s forwards; }
-  .credit-name { font-size:clamp(12px,1.6vw,14px); letter-spacing:3px;
-                  color:rgba(255,255,255,0.85); text-transform:uppercase; }
-  .enter-btn { margin-top:6px; background:none;
-               border:1px solid rgba(255,255,255,0.25); border-radius:30px;
-               padding:10px 38px; color:rgba(255,255,255,0.9);
-               font-family:'Courier New',Courier,monospace;
-               font-size:clamp(10px,1.4vw,12px); letter-spacing:5px;
-               text-transform:uppercase; cursor:pointer;
-               opacity:0; animation:fadeIn 0.5s ease 2s forwards;
-               transition:background 0.2s,border-color 0.2s; }
-  .enter-btn:hover { background:rgba(0,180,216,0.15); border-color:#00B4D8; }
-  .enter-btn span { animation:pulse 2.2s ease-in-out 2.5s infinite; display:inline-block; }
-  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-  @keyframes pulse { 0%,100%{opacity:0.35} 50%{opacity:0.08} }
-</style></head><body>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000814;
+    font-family: 'Courier New', Courier, monospace;
+  }
+
+  /* Star canvas fills entire background */
+  #stars {
+    position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%; z-index: 0;
+  }
+
+  /* Outer wrapper — true viewport fill */
+  .screen {
+    position: relative; z-index: 1;
+    width: 100%; min-height: 100vh;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: clamp(16px, 5vw, 40px) clamp(16px, 6vw, 60px);
+    text-align: center;
+  }
+
+  /* Inner content card — max-width so it never stretches ugly on ultra-wide */
+  .card {
+    display: flex; flex-direction: column;
+    align-items: center;
+    width: 100%; max-width: 560px;
+    gap: 0;
+  }
+
+  /* NASA logo */
+  .logo {
+    width: clamp(100px, 18vw, 160px);
+    filter: drop-shadow(0 0 18px rgba(252,61,33,0.6));
+    animation: float 4s ease-in-out infinite;
+    margin-bottom: clamp(16px, 3vw, 26px);
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-10px); }
+  }
+
+  /* Sub-label */
+  .label-ml {
+    font-size: clamp(10px, 2.2vw, 14px);
+    font-weight: 700;
+    letter-spacing: clamp(3px, 1vw, 6px);
+    color: #00B4D8;
+    text-transform: uppercase;
+    margin-bottom: clamp(8px, 1.5vw, 12px);
+    opacity: 0;
+    animation: fadeUp 0.8s ease 0.3s forwards;
+  }
+
+  /* Main title */
+  .title-main {
+    font-size: clamp(18px, 5vw, 38px);
+    font-weight: 900;
+    letter-spacing: clamp(2px, 1vw, 4px);
+    color: #FFFFFF;
+    text-transform: uppercase;
+    text-shadow: 0 0 30px rgba(0,180,216,0.4);
+    line-height: 1.2;
+    margin-bottom: clamp(24px, 4vw, 40px);
+    opacity: 0;
+    animation: fadeUp 0.8s ease 0.6s forwards;
+  }
+
+  /* Horizontal rule */
+  .divider {
+    width: clamp(140px, 40%, 220px);
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #00B4D8, transparent);
+    margin-bottom: clamp(20px, 3vw, 30px);
+    opacity: 0;
+    animation: fadeIn 0.8s ease 1s forwards;
+  }
+
+  /* Credits block */
+  .credits {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(4px, 1vw, 8px);
+    margin-bottom: clamp(28px, 5vw, 44px);
+    opacity: 0;
+    animation: fadeIn 0.8s ease 1.2s forwards;
+  }
+  .credit-name {
+    font-size: clamp(11px, 1.8vw, 14px);
+    letter-spacing: clamp(2px, 0.8vw, 4px);
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* Enter button */
+  .enter-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 30px;
+    padding: clamp(8px, 1.5vw, 11px) clamp(24px, 5vw, 42px);
+    color: rgba(255,255,255,0.9);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: clamp(10px, 1.6vw, 13px);
+    letter-spacing: clamp(3px, 0.8vw, 5px);
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0;
+    animation: fadeIn 0.5s ease 2s forwards;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+  .enter-btn:hover { background: rgba(0,180,216,0.15); border-color: #00B4D8; }
+  .enter-btn span { animation: pulse 2.2s ease-in-out 2.5s infinite; display: inline-block; }
+
+  @keyframes fadeUp  { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+  @keyframes pulse   { 0%,100% { opacity:0.35; } 50% { opacity:0.08; } }
+
+  /* ── Mobile tweaks ─────────────────────────────────────── */
+  @media (max-width: 480px) {
+    .title-main { letter-spacing: 2px; }
+    .credit-name { letter-spacing: 2px; }
+    .enter-btn   { letter-spacing: 3px; }
+  }
+</style>
+</head>
+<body>
 <canvas id="stars"></canvas>
 <div class="screen">
-  <img class="logo" src="https://upload.wikimedia.org/wikipedia/commons/e/e5/NASA_logo.svg" alt="NASA">
-  <div class="label-ml">Machine Learning Project</div>
-  <div class="title-main">Jet Engine RUL Prediction</div>
-  <div class="divider"></div>
-  <div class="credits">
-    <div class="credit-name">Ali Ahsan</div>
-    <div class="credit-name">Anas Bin Waheed</div>
-    <div class="credit-name">Haqiq Azeem Khan</div>
+  <div class="card">
+    <img class="logo"
+         src="https://upload.wikimedia.org/wikipedia/commons/e/e5/NASA_logo.svg"
+         alt="NASA">
+    <div class="label-ml">Machine Learning Project</div>
+    <div class="title-main">Jet Engine RUL Prediction</div>
+    <div class="divider"></div>
+    <div class="credits">
+      <div class="credit-name">Ali Ahsan</div>
+      <div class="credit-name">Anas Bin Waheed</div>
+      <div class="credit-name">Haqiq Azeem Khan</div>
+    </div>
+    <button class="enter-btn" onclick="goToApp()">
+      <span>&#9654;&nbsp; Press Space or Click to Enter</span>
+    </button>
   </div>
-  <button class="enter-btn" onclick="goToApp()">
-    <span>&#9654; &nbsp; Press Space or Click to Enter</span>
-  </button>
 </div>
 <script>
-const canvas=document.getElementById('stars'),ctx=canvas.getContext('2d');
-function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
-resize();window.addEventListener('resize',resize);
-const stars=Array.from({length:180},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.4+0.3,a:Math.random(),da:(Math.random()*0.004+0.001)*(Math.random()<0.5?1:-1)}));
-function drawStars(){ctx.clearRect(0,0,canvas.width,canvas.height);for(const s of stars){s.a=Math.max(0.05,Math.min(1,s.a+s.da));if(s.a<=0.05||s.a>=1)s.da*=-1;ctx.beginPath();ctx.arc(s.x*canvas.width,s.y*canvas.height,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${s.a})`;ctx.fill();}requestAnimationFrame(drawStars);}
-drawStars();
-function goToApp(){try{window.parent.location.href=window.parent.location.href.split('?')[0]+'?start=true';}catch(e){window.location.href='?start=true';}}
-document.addEventListener('keydown',function(e){if(e.code==='Space'||e.key===' '){e.preventDefault();goToApp();}});
-document.body.setAttribute('tabindex','0');document.body.focus();
-</script></body></html>""", height=620, scrolling=False)
+  /* Star canvas */
+  const canvas = document.getElementById('stars');
+  const ctx    = canvas.getContext('2d');
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const stars = Array.from({length: 200}, () => ({
+    x:  Math.random(),
+    y:  Math.random(),
+    r:  Math.random() * 1.4 + 0.3,
+    a:  Math.random(),
+    da: (Math.random() * 0.004 + 0.001) * (Math.random() < 0.5 ? 1 : -1)
+  }));
+
+  function drawStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const s of stars) {
+      s.a = Math.max(0.05, Math.min(1, s.a + s.da));
+      if (s.a <= 0.05 || s.a >= 1) s.da *= -1;
+      ctx.beginPath();
+      ctx.arc(s.x * canvas.width, s.y * canvas.height, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(drawStars);
+  }
+  drawStars();
+
+  /* Navigation */
+  function goToApp() {
+    try {
+      const base = window.parent.location.href.split('?')[0];
+      window.parent.location.href = base + '?start=true';
+    } catch(e) {
+      window.location.href = '?start=true';
+    }
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); goToApp(); }
+  });
+  document.body.setAttribute('tabindex', '0');
+  document.body.focus();
+</script>
+</body>
+</html>""", height=700, scrolling=False)
     st.stop()
 
 intro_placeholder.empty()
@@ -154,11 +328,24 @@ intro_placeholder.empty()
 # ════════════════════════════════════════════════════════════════════════════
 st.markdown(f"""
 <style>
+  /* ── Base fonts & app background ── */
   html,body,[class*="css"]{{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;}}
   .stApp{{background:linear-gradient(160deg,#010b1f 0%,#031638 60%,#0a1f4a 100%);color:{NASA_WHITE};}}
-  [data-testid="stSidebar"]{{background:linear-gradient(180deg,#010d25 0%,#021238 100%);border-right:2px solid {NASA_BLUE};}}
-  [data-testid="stSidebar"] .stMarkdown,[data-testid="stSidebar"] label,[data-testid="stSidebar"] span{{color:{NASA_WHITE}!important;}}
+
+  /* ── Sidebar: polished, seamlessly integrated ── */
+  [data-testid="stSidebar"]{{
+    background:linear-gradient(180deg,#010d25 0%,#021238 100%);
+    border-right:2px solid {NASA_BLUE};
+  }}
+  [data-testid="stSidebar"] > div:first-child {{padding-top:1.2rem;}}
+  [data-testid="stSidebar"] .stMarkdown,
+  [data-testid="stSidebar"] label,
+  [data-testid="stSidebar"] span{{color:{NASA_WHITE}!important;}}
+
+  /* ── Typography ── */
   h1{{color:{NASA_WHITE};letter-spacing:2px;}} h2,h3{{color:{NASA_LIGHT};}}
+
+  /* ── Component cards & badges ── */
   .metric-card{{background:linear-gradient(135deg,#0a1a3a 0%,#0f2460 100%);border:1px solid {NASA_BLUE};border-radius:12px;padding:22px 26px;text-align:center;box-shadow:0 0 20px rgba(11,61,145,0.4);}}
   .metric-label{{font-size:13px;color:{NASA_GREY};text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;}}
   .metric-value{{font-size:42px;font-weight:700;color:{NASA_WHITE};line-height:1.1;}}
@@ -172,15 +359,26 @@ st.markdown(f"""
   .error-box{{background:rgba(252,61,33,0.15);border-left:4px solid {NASA_RED};border-radius:6px;padding:14px 18px;margin:10px 0;font-size:14px;color:#FFCDD2;}}
   .success-box{{background:rgba(0,200,83,0.12);border-left:4px solid #00C853;border-radius:6px;padding:14px 18px;margin:10px 0;font-size:14px;color:#C8E6C9;}}
   .template-box{{background:rgba(0,180,216,0.10);border:1px solid rgba(0,180,216,0.4);border-radius:8px;padding:16px 20px;margin:10px 0;font-size:13px;color:{NASA_LIGHT};}}
+
+  /* ── Tabs ── */
   .stTabs [data-baseweb="tab-list"]{{background:rgba(11,61,145,0.2);border-radius:10px;padding:4px;gap:4px;}}
   .stTabs [data-baseweb="tab"]{{border-radius:8px;color:{NASA_GREY};font-weight:600;font-size:14px;padding:8px 20px;}}
   .stTabs [aria-selected="true"]{{background:{NASA_BLUE}!important;color:{NASA_WHITE}!important;}}
+
+  /* ── Buttons & inputs ── */
   .stButton>button{{background:linear-gradient(135deg,{NASA_BLUE} 0%,#1a52c4 100%);color:{NASA_WHITE};border:none;border-radius:8px;font-weight:600;letter-spacing:0.5px;padding:10px 28px;transition:all 0.2s ease;}}
   .stButton>button:hover{{background:linear-gradient(135deg,#1a52c4 0%,#2563de 100%);box-shadow:0 4px 15px rgba(11,61,145,0.5);transform:translateY(-1px);}}
   [data-testid="stFileUploader"]{{background:rgba(11,61,145,0.15);border:2px dashed {NASA_BLUE};border-radius:10px;padding:10px;}}
   .stDataFrame{{border:1px solid {NASA_BLUE};border-radius:8px;}}
   hr{{border-color:rgba(11,61,145,0.4);}}
   .stSelectbox div[data-baseweb="select"]>div{{background:rgba(11,61,145,0.2);border-color:{NASA_BLUE};color:{NASA_WHITE};}}
+
+  /* ── Mobile responsiveness ── */
+  @media (max-width:768px) {{
+    .block-container{{padding-left:0.6rem!important;padding-right:0.6rem!important;}}
+    .metric-value{{font-size:28px;}}
+    .stTabs [data-baseweb="tab"]{{font-size:12px;padding:6px 10px;}}
+  }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -706,34 +904,38 @@ def predict_rul_lstm(model, seq, preprocessors, config):
 # ════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown(f"""
-    <div style="text-align:center;padding:10px 0 20px 0;">
-      <div style="font-size:40px;">🚀</div>
-      <div style="font-size:20px;font-weight:700;color:{NASA_WHITE};letter-spacing:2px;">RUL PREDICTOR</div>
-      <div style="font-size:11px;color:{NASA_GREY};letter-spacing:3px;margin-top:4px;">NASA C-MAPSS · FD004</div>
+    <div style="text-align:center;padding:6px 0 18px 0;">
+      <div style="font-size:36px;line-height:1.2;">🚀</div>
+      <div style="font-size:18px;font-weight:800;color:{NASA_WHITE};letter-spacing:2px;margin-top:4px;">RUL PREDICTOR</div>
+      <div style="font-size:10px;color:{NASA_GREY};letter-spacing:3px;margin-top:4px;text-transform:uppercase;">NASA C-MAPSS · FD004</div>
     </div>
-    <hr style="border-color:rgba(11,61,145,0.5);margin:0 0 20px 0;">
+    <hr style="border-color:rgba(11,61,145,0.6);margin:0 0 16px 0;">
     """, unsafe_allow_html=True)
 
     st.markdown(f"""
-    <div class="info-box" style="font-size:12px;">
+    <div class="info-box" style="font-size:12px;line-height:1.6;">
       <b>📂 Artifact folder:</b><br>
-      <code>./lstm/</code><br><br>
-      All model files should be placed inside this folder.
+      <code>./jetrul/</code><br>
+      Place all model files inside this folder.
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("**ℹ️ Model Results**")
     st.markdown(f"""
-    <div class="info-box" style="font-size:12px;">
-      <b>LSTM:</b> RMSE 22.7 · NASA 3994 (237 engines)<br>
-      <b>Random Forest:</b> RMSE ~27.6 · NASA ~34084<br>
+    <div class="info-box" style="font-size:12px;margin-top:12px;line-height:1.7;">
+      <b>ℹ️ Model Results</b><br>
+      <b>LSTM:</b> RMSE 22.7 · NASA 3994<br>
+      <b>RF:</b> RMSE ~27.6 · NASA ~34084<br>
       <b>XGBoost:</b> RMSE ~25.1 · NASA ~8326<br>
       <b>K-Means:</b> Silhouette 0.43 · DB 0.85
     </div>
     """, unsafe_allow_html=True)
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:11px;color:{NASA_GREY};text-align:center;'>NASA C-MAPSS Prognostics · v2.0</div>", unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <hr style="border-color:rgba(11,61,145,0.4);margin:16px 0 10px 0;">
+    <div style="font-size:10px;color:{NASA_GREY};text-align:center;letter-spacing:1px;">
+      NASA C-MAPSS Prognostics · v2.1
+    </div>
+    """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════════
 # HEADER BANNER
@@ -769,7 +971,7 @@ tab_lstm, tab_rf, tab_xgb, tab_km, tab_eda, tab_compare, tab_about = st.tabs([
 # TAB 1 — LSTM
 # ════════════════════════════════════════════════════════════════════════════
 with tab_lstm:
-    st.markdown("### ⚡ LSTM — CNN + LSTM + Bahdanau Attention")
+    st.markdown("### ⚡ Time Series — CNN + LSTM")
     st.markdown(f"""
     <div class="info-box">
       Upload a CSV with engine sensor time-series data.
@@ -811,7 +1013,7 @@ with tab_lstm:
         model_ok = True
         st.markdown('<div class="success-box">✅ Model loaded — ready for inference.</div>', unsafe_allow_html=True)
     except FileNotFoundError as e:
-        st.markdown(f'<div class="error-box">⚠️ File not found: <code>{e}</code><br>Place artifacts in <code>./lstm/</code>.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="error-box">⚠️ File not found: <code>{e}</code><br>Place artifacts in <code>./jetrul/</code>.</div>', unsafe_allow_html=True)
     except Exception as e:
         st.markdown(f'<div class="error-box">❌ Error loading model: {e}</div>', unsafe_allow_html=True)
 
@@ -935,7 +1137,7 @@ with tab_rf:
         rf_ok = True
         st.markdown('<div class="success-box">✅ Random Forest loaded — ready for inference.</div>', unsafe_allow_html=True)
     except FileNotFoundError:
-        st.markdown(f'<div class="error-box">⚠️ <code>rf_best_model.pkl</code> not found in <code>./lstm/</code>.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="error-box">⚠️ <code>rf_best_model.pkl</code> not found in <code>./jetrul/</code>.</div>', unsafe_allow_html=True)
     except Exception as e:
         st.markdown(f'<div class="error-box">❌ Error loading RF: {e}</div>', unsafe_allow_html=True)
 
@@ -1084,7 +1286,7 @@ with tab_xgb:
         xgb_ok = True
         st.markdown('<div class="success-box">✅ XGBoost loaded — ready for inference.</div>', unsafe_allow_html=True)
     except FileNotFoundError:
-        st.markdown(f'<div class="error-box">⚠️ <code>xgb_best_model.pkl</code> not found in <code>./lstm/</code>.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="error-box">⚠️ <code>xgb_best_model.pkl</code> not found in <code>./jetrul/</code>.</div>', unsafe_allow_html=True)
     except Exception as e:
         st.markdown(f'<div class="error-box">❌ Error loading XGBoost: {e}</div>', unsafe_allow_html=True)
 
@@ -1192,7 +1394,7 @@ with tab_km:
     if train_df_km is None:
         st.markdown(f"""
         <div class="error-box">
-          ⚠️ <code>train_regression.csv</code> not found in <code>./lstm/</code>.<br>
+          ⚠️ <code>train_regression.csv</code> not found in <code>./jetrul/</code>.<br>
           This file is needed to run the K-Means explorer. Run Part 7 of the notebook to export it.
         </div>""", unsafe_allow_html=True)
     else:
@@ -1703,7 +1905,7 @@ with tab_eda:
     <div class="info-box">
       Interactive visualisations of the FD004 dataset and preprocessing pipeline.
       Load <code>train_regression.csv</code> and/or <code>test_predictions.csv</code>
-      from the <code>./lstm/</code> folder to unlock all charts.
+      from the <code>./jetrul/</code> folder to unlock all charts.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1714,8 +1916,8 @@ with tab_eda:
         st.markdown(f"""
         <div class="error-box">
           ⚠️ Neither <code>train_regression.csv</code> nor <code>test_predictions.csv</code>
-          found in <code>./lstm/</code>.<br>
-          Run Part 7 of the notebook to export Streamlit assets, then copy them into <code>./lstm/</code>.
+          found in <code>./jetrul/</code>.<br>
+          Run Part 7 of the notebook to export Streamlit assets, then copy them into <code>./jetrul/</code>.
         </div>""", unsafe_allow_html=True)
     else:
         eda_tab1, eda_tab2, eda_tab3, eda_tab4, eda_tab5 = st.tabs([
@@ -2107,7 +2309,7 @@ with tab_compare:
         # Static comparison table if no predictions file
         st.markdown(f"""
         <div class="info-box">
-          Place <code>test_predictions.csv</code> in <code>./lstm/</code> to enable live comparison charts.<br>
+          Place <code>test_predictions.csv</code> in <code>./jetrul/</code> to enable live comparison charts.<br>
           Showing published benchmark results below.
         </div>""", unsafe_allow_html=True)
 
@@ -2308,7 +2510,7 @@ health-state data: it weighs the <i>trajectory</i> rather than the <i>snapshot</
     st.dataframe(metrics_info, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.markdown("#### 📂 Required Artifact Files in `./lstm/`")
+    st.markdown("#### 📂 Required Artifact Files in `./jetrul/`")
     files_info = pd.DataFrame({
         "File": [
             "lstm_fd004_model.keras",

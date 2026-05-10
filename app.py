@@ -2229,20 +2229,22 @@ with tab_compare:
                                    height=380, xaxis_title="Model", yaxis_title="Error (cycles)")
             st.plotly_chart(fig_bar, use_container_width=True)
 
-            # NASA Score bar
-            fig_ns_live = go.Figure(go.Bar(
-                x=metrics_df["Model"], y=metrics_df["NASA Score"],
-                marker_color=["#00B4D8", "#F28E2B", "#00C853"][:len(rows)],
-                text=metrics_df["NASA Score"].round(0).astype(int),
-                textposition="outside", textfont=dict(color=NASA_WHITE)
-            ))
-            fig_ns_live.add_annotation(text="↓ Lower is better", xref="paper", yref="paper",
-                                        x=0.5, y=1.05, showarrow=False, font=dict(color=NASA_GREY))
-            fig_ns_live.update_layout(title="NASA Score Comparison (lower = better)",
-                                       xaxis_title="Model", yaxis_title="NASA Score",
-                                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                                       font_color=NASA_WHITE, height=340)
-            st.plotly_chart(fig_ns_live, use_container_width=True)
+            # NASA Score — shown as a small info note, not a bar chart
+            # NASA Score uses an exponential penalty formula so values reach tens of thousands
+            # even for good models (RF ~34k, XGB ~8k, LSTM ~4k on FD004 with 248 engines).
+            # RMSE is the cleaner headline metric for this audience.
+            ns_rows = [(r["Model"], r["NASA Score"]) for r in rows]
+            ns_parts = "  |  ".join(f'{m}: {s:,.0f}' for m, s in ns_rows)
+            st.markdown(f"""
+            <div class="info-box" style="margin-top:6px;margin-bottom:4px;">
+              <b>ℹ️ NASA Score (lower = better):</b>&nbsp; {ns_parts}<br>
+              <span style="font-size:12px;opacity:0.8;">
+                NASA Score uses an exponential asymmetric penalty — late predictions cost ~3× more than early ones.
+                Values naturally reach thousands even for well-performing models on FD004 (248 engines × exponential formula).
+                <b>RMSE above is the cleaner measure of average prediction accuracy in cycles.</b>
+              </span>
+            </div>
+            """, unsafe_allow_html=True)
 
             # Scatter: predicted vs actual per model
             st.markdown("#### Predicted vs Actual RUL — Per Engine (Last Cycle)")
@@ -2341,21 +2343,46 @@ with tab_compare:
           peak accuracy.
         </div>""", unsafe_allow_html=True)
 
-        # NASA score bar chart (static) — values match sidebar reference metrics
-        fig_ns = go.Figure(go.Bar(
-            x=["Random Forest", "XGBoost", "CNN-LSTM"],
-            y=[34084, 8326, 3994],
+        # Static RMSE bar chart — cleaner headline metric than NASA Score
+        fig_rmse_static = go.Figure()
+        fig_rmse_static.add_trace(go.Bar(
+            name="RMSE", x=["Random Forest", "XGBoost", "CNN-LSTM"],
+            y=[27.6, 25.1, 22.7],
             marker_color=[NASA_GREY, "#00B4D8", "#00C853"],
-            text=["~34,084", "~8,326", "~3,994"], textposition="outside",
+            text=["~27.6", "~25.1", "~22.7"], textposition="outside",
             textfont=dict(color=NASA_WHITE)
         ))
-        fig_ns.add_annotation(text="↓ Lower is better", xref="paper", yref="paper",
-                              x=0.5, y=1.05, showarrow=False, font=dict(color=NASA_GREY))
-        fig_ns.update_layout(title="NASA Score Comparison (lower = better)",
-                              xaxis_title="Model", yaxis_title="NASA Score",
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              font_color=NASA_WHITE, height=380)
-        st.plotly_chart(fig_ns, use_container_width=True)
+        fig_rmse_static.add_trace(go.Bar(
+            name="MAE", x=["Random Forest", "XGBoost", "CNN-LSTM"],
+            y=[18.5, 16.5, 14.5],
+            marker_color=["rgba(139,139,139,0.6)", "rgba(0,180,216,0.6)", "rgba(0,200,83,0.6)"],
+            text=["~18–19", "~16–17", "~14–15"], textposition="outside",
+            textfont=dict(color=NASA_WHITE)
+        ))
+        fig_rmse_static.update_layout(
+            barmode="group",
+            title="RMSE & MAE Comparison — FD004 Test Set (lower = better)",
+            xaxis_title="Model", yaxis_title="Error (cycles)",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font_color=NASA_WHITE,
+            legend=dict(font=dict(color=NASA_WHITE)),
+            height=400
+        )
+        st.plotly_chart(fig_rmse_static, use_container_width=True)
+
+        # NASA Score as info note — not a chart, because exponential values mislead
+        st.markdown(f"""
+        <div class="info-box">
+          <b>ℹ️ NASA Score (official benchmark metric, lower = better):</b><br>
+          Random Forest: ~34,084 &nbsp;|&nbsp; XGBoost: ~8,326 &nbsp;|&nbsp; CNN-LSTM: ~3,994<br>
+          <span style="font-size:12px;opacity:0.8;">
+            These large numbers are <b>normal for FD004</b>. The NASA Score uses an exponential penalty formula
+            (e<sup>d/10</sup>−1 for late predictions) — a model that is 50 cycles late on just one engine
+            contributes ~147 to the total. With 248 test engines, scores in the thousands are expected even for
+            strong models. The RMSE chart above is the cleaner measure of average accuracy in cycles.
+          </span>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Model strengths table (always shown)
     st.markdown("#### Model Trade-off Summary")

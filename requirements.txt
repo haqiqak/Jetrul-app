@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────
+# NASA C-MAPSS FD004 RUL Predictor — Python Dependencies
+# Compatible with Python 3.11, 3.12, 3.13
+# Install: pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────
+
+# Web framework
+streamlit>=1.35.0,<2.0.0
+
+# Deep learning (LSTM + custom Bahdanau attention layer)
+tensorflow>=2.15.0
+
+# Classical ML models (Random Forest, XGBoost, K-Means, PCA, scalers)
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+
+# Model serialisation
+joblib>=1.3.0
+
+# Data
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualisation
+plotly>=5.18.0
